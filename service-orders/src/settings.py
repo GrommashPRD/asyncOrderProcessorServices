@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str
 
     model_config = SettingsConfigDict(
-        env_file=".env.dev" if Path(".env.dev").exists() and not os.getenv("DOCKER_ENV") else None,
+        env_file=".env.dev_orders_example" if Path(".env.dev_orders_example").exists() and not os.getenv("DOCKER_ENV") else None,
         env_file_encoding="utf-8",
     )
 
