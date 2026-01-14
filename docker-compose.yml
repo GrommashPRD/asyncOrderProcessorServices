@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  postgres-orders:
+    image: postgres:15-alpine
+    container_name: postgres-orders
+    env_file:
+      - .env.db_orders_example
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-orders-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orders_user -d orders_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - order-service-network
+
+  postgres-processor:
+    image: postgres:15-alpine
+    container_name: postgres-processor
+    env_file:
+      - .env.db_processor_example
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-processor-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U processor_user -d processor_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - order-service-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq
+    env_file:
+      - .env.rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - order-service-network
+
+  # Service Orders
+  service-orders:
+    build:
+      context: ./service-orders
+      dockerfile: Dockerfile
+    container_name: service-orders
+    env_file:
+      - .env.prod_orders_example
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres-orders:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./service-orders:/app
+    networks:
+      - order-service-network
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        until pg_isready -h postgres-orders -p 5432 -U orders_user; do
+          echo 'Database is unavailable - sleeping'
+          sleep 2
+        done &&
+        echo 'Database is up - executing migrations' &&
+        cd /app &&
+        alembic upgrade head &&
+        echo 'Migrations completed - starting service' &&
+        uvicorn src.main:app --host 0.0.0.0 --port 8000
+      "
+
+  service-processor:
+    build:
+      context: ./service-processor
+      dockerfile: Dockerfile
+    container_name: service-processor
+    env_file:
+      - .env.prod_processor_example
+    depends_on:
+      postgres-processor:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./service-processor:/app
+    networks:
+      - order-service-network
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        until pg_isready -h postgres-processor -p 5432 -U processor_user; do
+          echo 'Database is unavailable - sleeping'
+          sleep 2
+        done &&
+        echo 'Database is up - executing migrations' &&
+        cd /app &&
+        alembic upgrade head &&
+        echo 'Migrations completed - starting service' &&
+        python run.py
+      "
+
+volumes:
+  postgres-orders-data:
+  postgres-processor-data:
+  rabbitmq-data:
+
+networks:
+  order-service-network:
+    driver: bridge
