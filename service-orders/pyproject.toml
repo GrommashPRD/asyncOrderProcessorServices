@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "service-orders"
+version = "0.1.0"
+description = "Order service microservice"
+requires-python = ">=3.8"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "gunicorn",
+    "dependency-injector",
+    "pydantic-settings",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "aio-pika",
+    "python-json-logger",
+    "alembic",
+    "pytest",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.11.0",
+    "httpx>=0.24.0",
+]
+
+[tool.setuptools]
+packages = {find = {}}
+
+[tool.setuptools.package-dir]
+"" = "."
